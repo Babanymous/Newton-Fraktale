@@ -3,40 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Newton Fractal - Deep Zoom</title>
+    <title>Newton Fractal - Cinema Mode</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; }
-        canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        /* UI Styling */
         .ui {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            background: rgba(15, 15, 15, 0.9); color: white;
-            padding: 15px; border-radius: 15px; backdrop-filter: blur(10px);
-            width: 85%; max-width: 350px; border: 1px solid rgba(255,255,255,0.1);
-            pointer-events: auto; z-index: 10;
+            background: rgba(10, 10, 10, 0.9); color: white;
+            padding: 20px; border-radius: 20px; backdrop-filter: blur(15px);
+            width: 85%; max-width: 380px; border: 1px solid rgba(255,255,255,0.15);
+            pointer-events: auto; z-index: 10; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
+        
+        .controls-row { display: flex; gap: 10px; margin-top: 10px; }
+        
+        button {
+            flex: 1; background: #00d4ff; color: #000; border: none; 
+            padding: 12px; border-radius: 10px; font-weight: bold; 
+            cursor: pointer; transition: 0.3s; font-size: 0.9rem;
+        }
+        button.active { background: #ff0077; color: white; }
+        button:active { transform: scale(0.95); }
+
         .btn-reset {
             position: absolute; top: 20px; right: 20px;
-            background: rgba(255, 255, 255, 0.2); color: white;
-            border: none; padding: 10px 15px; border-radius: 8px;
-            cursor: pointer; backdrop-filter: blur(5px);
+            background: rgba(255, 255, 255, 0.1); color: white;
+            border: 1px solid rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 8px;
         }
+
         input { width: 100%; margin: 10px 0; accent-color: #00d4ff; }
-        label { font-size: 0.8rem; color: #00d4ff; font-weight: bold; }
-        .hint { font-size: 0.7rem; color: #888; text-align: center; margin-top: 5px; }
+        label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        span.val { color: #00d4ff; float: right; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<button class="btn-reset" onclick="resetView()">Ansicht Reset</button>
+<button class="btn-reset" onclick="resetView()">Reset</button>
 
 <div class="ui">
-    <label>Exponent (zⁿ - 1): <span id="nVal">3.00</span></label>
+    <label>Exponent <span class="val" id="nVal">3.00</span></label>
     <input type="range" id="nSlider" min="2" max="10" step="0.01" value="3">
     
-    <label>Farbe:</label>
-    <input type="range" id="timeSlider" min="0" max="10" step="0.1" value="1">
+    <label>Farb-Geschwindigkeit <span class="val" id="tVal">1.0</span></label>
+    <input type="range" id="timeSlider" min="0" max="5" step="0.1" value="1">
     
-    <div class="hint">Wischen: Bewegen | Zwei Finger: Deep Zoom</div>
+    <div class="controls-row">
+        <button id="playBtn" onclick="toggleAutoPlay()">▶ Auto-Play Start</button>
+    </div>
+    <div style="font-size: 0.65rem; color: #555; text-align: center; margin-top: 8px;">
+        Manueller Zoom & Panning jederzeit möglich
+    </div>
 </div>
 
 <canvas id="glCanvas"></canvas>
@@ -66,23 +84,18 @@
         vec2 z = uv * u_zoom + u_offset;
         
         float iter = 0.0;
-        // Erhöhte Iterationen für Deep Zoom Details
-        const float maxIter = 100.0; 
+        const float maxIter = 80.0; 
         
         for (float i = 0.0; i < maxIter; i++) {
             vec2 fz = cPow(z, u_n) - vec2(1.0, 0.0);
             vec2 dfz = u_n * cPow(z, u_n - 1.0);
             z -= cDiv(fz, dfz);
-            if (length(fz) < 0.00001) { 
-                iter = i; 
-                break; 
-            }
+            if (length(fz) < 0.0001) { iter = i; break; }
         }
 
         float angle = atan(z.y, z.x);
         vec3 col = 0.5 + 0.5 * cos(angle + vec3(0, 2, 4) + u_time);
-        // Weichere Schattierung basierend auf der Iterationstiefe
-        gl_FragColor = vec4(col * (1.0 - pow(iter/maxIter, 0.5)), 1.0);
+        gl_FragColor = vec4(col * (1.0 - pow(iter/maxIter, 0.6)), 1.0);
     }
 </script>
 
@@ -90,13 +103,13 @@
     const canvas = document.getElementById('glCanvas');
     const gl = canvas.getContext('webgl');
 
+    // Shader Boilerplate
     function createShader(gl, type, source) {
         const s = gl.createShader(type);
         gl.shaderSource(s, source);
         gl.compileShader(s);
         return s;
     }
-
     const vs = createShader(gl, gl.VERTEX_SHADER, `attribute vec2 pos; void main(){gl_Position=vec4(pos,0,1);}`);
     const fs = createShader(gl, gl.FRAGMENT_SHADER, document.getElementById('fragmentShader').text);
     const prog = gl.createProgram();
@@ -119,13 +132,20 @@
     };
 
     let zoom = 2.5, offsetX = 0.0, offsetY = 0.0;
+    let isAutoPlaying = false;
+    let autoTime = 0;
     let lastTouchX, lastTouchY, lastDist = 0;
 
-    function resetView() {
-        zoom = 2.5; offsetX = 0.0; offsetY = 0.0;
+    function resetView() { zoom = 2.5; offsetX = 0.0; offsetY = 0.0; }
+
+    function toggleAutoPlay() {
+        isAutoPlaying = !isAutoPlaying;
+        const btn = document.getElementById('playBtn');
+        btn.innerText = isAutoPlaying ? "■ Auto-Play Stop" : "▶ Auto-Play Start";
+        btn.className = isAutoPlaying ? "active" : "";
     }
 
-    // Touch & Mouse
+    // Interaktionen
     canvas.addEventListener('touchstart', e => {
         if (e.touches.length === 1) {
             lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
@@ -139,9 +159,8 @@
         if (e.touches.length === 1) {
             const dx = e.touches[0].clientX - lastTouchX;
             const dy = e.touches[0].clientY - lastTouchY;
-            const aspect = canvas.width / canvas.height;
-            offsetX -= (dx / canvas.width) * zoom * Math.max(aspect, 1.0);
-            offsetY += (dy / canvas.height) * zoom * Math.max(1.0/aspect, 1.0);
+            offsetX -= (dx / canvas.width) * zoom;
+            offsetY += (dy / canvas.height) * zoom;
             lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
         } else if (e.touches.length === 2) {
             const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
@@ -150,25 +169,39 @@
         }
     }, { passive: false });
 
-    canvas.addEventListener('wheel', e => {
-        e.preventDefault();
-        zoom *= (e.deltaY > 0 ? 1.05 : 0.95);
-    }, { passive: false });
+    canvas.addEventListener('wheel', e => { e.preventDefault(); zoom *= (e.deltaY > 0 ? 1.05 : 0.95); }, { passive: false });
 
-    function render() {
+    function render(now) {
+        autoTime += 0.01;
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
+
+        let currentN = parseFloat(document.getElementById('nSlider').value);
+        let colorTime = autoTime * parseFloat(document.getElementById('timeSlider').value);
+
+        // Auto-Play Logik
+        if (isAutoPlaying) {
+            // Exponent schwingt zwischen 2.5 und 6.5
+            currentN = 4.5 + Math.sin(autoTime * 0.5) * 2.0;
+            document.getElementById('nSlider').value = currentN;
+            
+            // Pulsierender Zoom
+            zoom *= (1.0 + Math.sin(autoTime) * 0.005);
+        }
+
         gl.uniform2f(uniforms.res, canvas.width, canvas.height);
-        gl.uniform1f(uniforms.n, parseFloat(document.getElementById('nSlider').value));
+        gl.uniform1f(uniforms.n, currentN);
         gl.uniform1f(uniforms.zoom, zoom);
-        gl.uniform1f(uniforms.time, parseFloat(document.getElementById('timeSlider').value));
+        gl.uniform1f(uniforms.time, colorTime);
         gl.uniform2f(uniforms.offset, offsetX, offsetY);
-        document.getElementById('nVal').innerText = parseFloat(document.getElementById('nSlider').value).toFixed(2);
+        
+        document.getElementById('nVal').innerText = currentN.toFixed(2);
+        
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         requestAnimationFrame(render);
     }
-    render();
+    requestAnimationFrame(render);
 </script>
 </body>
 </html>
