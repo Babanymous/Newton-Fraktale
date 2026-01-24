@@ -3,16 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Newton Fractal Mobile</title>
+    <title>Newton Fractal - Deep Zoom</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
         .ui {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            background: rgba(15, 15, 15, 0.85); color: white;
+            background: rgba(15, 15, 15, 0.9); color: white;
             padding: 15px; border-radius: 15px; backdrop-filter: blur(10px);
-            width: 80%; max-width: 350px; border: 1px solid rgba(255,255,255,0.1);
+            width: 85%; max-width: 350px; border: 1px solid rgba(255,255,255,0.1);
             pointer-events: auto; z-index: 10;
+        }
+        .btn-reset {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(255, 255, 255, 0.2); color: white;
+            border: none; padding: 10px 15px; border-radius: 8px;
+            cursor: pointer; backdrop-filter: blur(5px);
         }
         input { width: 100%; margin: 10px 0; accent-color: #00d4ff; }
         label { font-size: 0.8rem; color: #00d4ff; font-weight: bold; }
@@ -21,14 +27,16 @@
 </head>
 <body>
 
+<button class="btn-reset" onclick="resetView()">Ansicht Reset</button>
+
 <div class="ui">
-    <label>Exponent: <span id="nVal">3.00</span></label>
+    <label>Exponent (zⁿ - 1): <span id="nVal">3.00</span></label>
     <input type="range" id="nSlider" min="2" max="10" step="0.01" value="3">
     
-    <label>Farbe & Zeit:</label>
+    <label>Farbe:</label>
     <input type="range" id="timeSlider" min="0" max="10" step="0.1" value="1">
     
-    <div class="hint">Wischen: Bewegen | Zwei Finger: Zoomen</div>
+    <div class="hint">Wischen: Bewegen | Zwei Finger: Deep Zoom</div>
 </div>
 
 <canvas id="glCanvas"></canvas>
@@ -48,7 +56,7 @@
 
     vec2 cPow(vec2 z, float n) {
         float r = length(z);
-        if (r < 0.0001) return vec2(0.0);
+        if (r < 1e-10) return vec2(0.0);
         float phi = atan(z.y, z.x);
         return pow(r, n) * vec2(cos(n * phi), sin(n * phi));
     }
@@ -58,16 +66,23 @@
         vec2 z = uv * u_zoom + u_offset;
         
         float iter = 0.0;
-        for (float i = 0.0; i < 40.0; i++) {
+        // Erhöhte Iterationen für Deep Zoom Details
+        const float maxIter = 100.0; 
+        
+        for (float i = 0.0; i < maxIter; i++) {
             vec2 fz = cPow(z, u_n) - vec2(1.0, 0.0);
             vec2 dfz = u_n * cPow(z, u_n - 1.0);
             z -= cDiv(fz, dfz);
-            if (length(fz) < 0.01) { iter = i; break; }
+            if (length(fz) < 0.00001) { 
+                iter = i; 
+                break; 
+            }
         }
 
         float angle = atan(z.y, z.x);
         vec3 col = 0.5 + 0.5 * cos(angle + vec3(0, 2, 4) + u_time);
-        gl_FragColor = vec4(col * (1.0 - iter/40.0), 1.0);
+        // Weichere Schattierung basierend auf der Iterationstiefe
+        gl_FragColor = vec4(col * (1.0 - pow(iter/maxIter, 0.5)), 1.0);
     }
 </script>
 
@@ -75,7 +90,6 @@
     const canvas = document.getElementById('glCanvas');
     const gl = canvas.getContext('webgl');
 
-    // Shader Setup
     function createShader(gl, type, source) {
         const s = gl.createShader(type);
         gl.shaderSource(s, source);
@@ -96,20 +110,25 @@
     gl.enableVertexAttribArray(pos);
     gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
 
-    const uRes = gl.getUniformLocation(prog, 'u_res');
-    const uN = gl.getUniformLocation(prog, 'u_n');
-    const uZoom = gl.getUniformLocation(prog, 'u_zoom');
-    const uTime = gl.getUniformLocation(prog, 'u_time');
-    const uOffset = gl.getUniformLocation(prog, 'u_offset');
+    const uniforms = {
+        res: gl.getUniformLocation(prog, 'u_res'),
+        n: gl.getUniformLocation(prog, 'u_n'),
+        zoom: gl.getUniformLocation(prog, 'u_zoom'),
+        time: gl.getUniformLocation(prog, 'u_time'),
+        offset: gl.getUniformLocation(prog, 'u_offset')
+    };
 
-    let zoom = 2.0, offsetX = 0.0, offsetY = 0.0;
+    let zoom = 2.5, offsetX = 0.0, offsetY = 0.0;
     let lastTouchX, lastTouchY, lastDist = 0;
 
-    // TOUCH EVENTS FÜR HANDY/TABLET
+    function resetView() {
+        zoom = 2.5; offsetX = 0.0; offsetY = 0.0;
+    }
+
+    // Touch & Mouse
     canvas.addEventListener('touchstart', e => {
         if (e.touches.length === 1) {
-            lastTouchX = e.touches[0].clientX;
-            lastTouchY = e.touches[0].clientY;
+            lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
         } else if (e.touches.length === 2) {
             lastDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         }
@@ -123,8 +142,7 @@
             const aspect = canvas.width / canvas.height;
             offsetX -= (dx / canvas.width) * zoom * Math.max(aspect, 1.0);
             offsetY += (dy / canvas.height) * zoom * Math.max(1.0/aspect, 1.0);
-            lastTouchX = e.touches[0].clientX;
-            lastTouchY = e.touches[0].clientY;
+            lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
         } else if (e.touches.length === 2) {
             const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
             if (lastDist > 0) zoom *= (lastDist / dist);
@@ -132,18 +150,20 @@
         }
     }, { passive: false });
 
-    // Maus-Unterstützung bleibt für PC erhalten
-    canvas.addEventListener('wheel', e => { zoom *= (e.deltaY > 0 ? 1.1 : 0.9); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        zoom *= (e.deltaY > 0 ? 1.05 : 0.95);
+    }, { passive: false });
 
     function render() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
-        gl.uniform2f(uRes, canvas.width, canvas.height);
-        gl.uniform1f(uN, parseFloat(document.getElementById('nSlider').value));
-        gl.uniform1f(uZoom, zoom);
-        gl.uniform1f(uTime, parseFloat(document.getElementById('timeSlider').value));
-        gl.uniform2f(uOffset, offsetX, offsetY);
+        gl.uniform2f(uniforms.res, canvas.width, canvas.height);
+        gl.uniform1f(uniforms.n, parseFloat(document.getElementById('nSlider').value));
+        gl.uniform1f(uniforms.zoom, zoom);
+        gl.uniform1f(uniforms.time, parseFloat(document.getElementById('timeSlider').value));
+        gl.uniform2f(uniforms.offset, offsetX, offsetY);
         document.getElementById('nVal').innerText = parseFloat(document.getElementById('nSlider').value).toFixed(2);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         requestAnimationFrame(render);
